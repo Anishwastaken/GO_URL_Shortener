@@ -27,7 +27,10 @@ func generateCode(length int) string {
 	return string(code)
 }
 
-// 🔥 REQUIRED FOR RENDER
+func startsWithHTTP(url string) bool {
+	return len(url) >= 7 && (url[:7] == "http://" || url[:8] == "https://")
+}
+
 func getPort() string {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -43,7 +46,7 @@ func main() {
 
 	router := http.NewServeMux()
 
-	// 🌍 Dynamic base URL (works locally + deployed)
+	
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		baseURL = "http://localhost:" + getPort() + "/"
@@ -69,6 +72,11 @@ func main() {
 		}
 
 		longURL := r.FormValue("url")
+
+		if !startsWithHTTP(longURL) {
+		longURL = "https://" + longURL
+		}
+
 		if longURL == "" {
 			http.Error(w, "URL cannot be empty", http.StatusBadRequest)
 			return
