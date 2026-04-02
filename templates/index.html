@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Go URL Shortener</title>
+    <style>
+        
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh; 
+            margin: 0;
+        }
+
+        .container {
+            background-color: #1e1e1e;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.8);
+            text-align: center;
+        }
+
+        input[type="url"] {
+            padding: 12px;
+            width: 250px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background-color: #2a2a2a;
+            color: white;
+            margin-right: 10px;
+            outline: none;
+        }
+
+        input[type="url"]:focus {
+            border-color: #00ff88;
+        }
+
+        button {
+            padding: 12px 20px;
+            background-color: #00ff88;
+            color: #121212;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>URL SHORTENER</h1>
+        <p>Drop your link below.</p>
+        
+        <form action="/shorten" method="POST">
+            <input type="url" name="url" placeholder="https://..." required>
+            <button type="submit">Shorten</button>
+        </form>
+
+        {{if .ShortURL}}
+<div style="margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 6px;">
+    <p style="color: #00ff88; margin: 0 0 10px 0;">Success!</p>
+
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <input 
+            type="text" 
+            id="shortUrl" 
+            value="{{.ShortURL}}" 
+            readonly 
+            style="flex:1; padding:10px; background:#121212; border:1px solid #333; color:white; border-radius:6px;"
+        >
+
+        <button onclick="copyLink(this)">Copy</button>
+    </div>
+</div>
+
+<script>
+    function copyLink(button) {
+        const input = document.getElementById("shortUrl");
+        input.select();
+        input.setSelectionRange(0, 99999);
+
+        document.execCommand("copy");
+
+        button.innerText = "Copied!";
+    }
+
+    if (window.location.search.includes("short=")) {
+        window.history.replaceState({}, document.title, "/");
+    }
+</script>
+{{end}}
+    </div>
+</body>
+</html>
