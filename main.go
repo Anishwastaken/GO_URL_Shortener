@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -19,7 +20,6 @@ var urlStore = make(map[string]string)
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func generateCode(length int) string {
-	rand.Seed(time.Now().UnixNano())
 	code := make([]byte, length)
 	for i := range code {
 		code[i] = charset[rand.Intn(len(charset))]
@@ -27,22 +27,41 @@ func generateCode(length int) string {
 	return string(code)
 }
 
+// 🔥 REQUIRED FOR RENDER
+func getPort() string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	return port
+}
+
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	tmpl = template.Must(template.ParseGlob("templates/*.html"))
 
 	router := http.NewServeMux()
 
+	// 🌍 Dynamic base URL (works locally + deployed)
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:" + getPort() + "/"
+	}
+
+	// Home page
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("short")
 
 		var data PageData
 		if code != "" {
-			data.ShortURL = "http://localhost:8080/" + code
+			data.ShortURL = baseURL + code
 		}
 
 		tmpl.ExecuteTemplate(w, "index.html", data)
 	})
 
+	// Shorten URL
 	router.HandleFunc("/shorten", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
@@ -68,6 +87,7 @@ func main() {
 		http.Redirect(w, r, "/?short="+code, http.StatusSeeOther)
 	})
 
+	// Redirect handler
 	router.HandleFunc("/{code}", func(w http.ResponseWriter, r *http.Request) {
 		code := r.PathValue("code")
 
@@ -81,11 +101,11 @@ func main() {
 	})
 
 	srv := http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + getPort(),
 		Handler: router,
 	}
 
-	fmt.Println("Running at http://localhost:8080")
+	fmt.Println("Server running on port", getPort())
 
 	err := srv.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
