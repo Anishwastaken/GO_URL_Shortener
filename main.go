@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/url"
 	"errors"
 	"fmt"
 	"html/template"
@@ -79,6 +80,12 @@ func main() {
 
 		if longURL == "" {
 			http.Error(w, "URL cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		_, err := url.ParseRequestURI(longURL)
+		if err != nil {
+			http.Error(w, "Invalid URL format", http.StatusBadRequest)
 			return
 		}
 
