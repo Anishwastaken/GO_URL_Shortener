@@ -66,6 +66,21 @@ func getPort() string {
 	return port
 }
 
+// keepAlive pings the app's own /ping endpoint every 10 minutes
+// to prevent Render free tier from spinning down the service.
+func keepAlive(baseURL string) {
+	for {
+		time.Sleep(10 * time.Minute)
+		resp, err := http.Get(baseURL + "ping")
+		if err != nil {
+			fmt.Println("Keep-alive ping failed:", err)
+			continue
+		}
+		resp.Body.Close()
+		fmt.Println("Keep-alive ping sent")
+	}
+}
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	loadStore()
@@ -74,10 +89,15 @@ func main() {
 
 	router := http.NewServeMux()
 
-	
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		baseURL = "http://localhost:" + getPort() + "/"
+	}
+
+	// Start keep-alive only when deployed (BASE_URL is set)
+	if os.Getenv("BASE_URL") != "" {
+		go keepAlive(baseURL)
+		fmt.Println("Keep-alive started, pinging", baseURL+"ping", "every 10 minutes")
 	}
 
 	// Home page
