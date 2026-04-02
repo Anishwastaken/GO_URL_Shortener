@@ -1,13 +1,15 @@
 package main
 
 import (
-	"net/url"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -17,6 +19,30 @@ type PageData struct {
 
 var tmpl *template.Template
 var urlStore = make(map[string]string)
+var mu sync.RWMutex
+
+const storeFile = "urls.json"
+
+func loadStore() {
+	data, err := os.ReadFile(storeFile)
+	if err != nil {
+		return // file doesn't exist yet, start fresh
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	json.Unmarshal(data, &urlStore)
+}
+
+func saveStore() {
+	mu.RLock()
+	defer mu.RUnlock()
+	data, err := json.Marshal(urlStore)
+	if err != nil {
+		fmt.Println("Error saving store:", err)
+		return
+	}
+	os.WriteFile(storeFile, data, 0644)
+}
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -42,6 +68,7 @@ func getPort() string {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+	loadStore()
 
 	tmpl = template.Must(template.ParseGlob("templates/*.html"))
 
@@ -90,23 +117,33 @@ func main() {
 		}
 
 		var code string
+		mu.Lock()
 		for {
 			code = generateCode(6)
 			if _, exists := urlStore[code]; !exists {
 				break
 			}
 		}
-
 		urlStore[code] = longURL
+		mu.Unlock()
+		saveStore()
 
 		http.Redirect(w, r, "/?short="+code, http.StatusSeeOther)
 	})
 
 	// Redirect handler
+	// Health check for keep-alive pinging
+	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("pong"))
+	})
+
 	router.HandleFunc("/{code}", func(w http.ResponseWriter, r *http.Request) {
 		code := r.PathValue("code")
 
+		mu.RLock()
 		longURL, ok := urlStore[code]
+		mu.RUnlock()
 		if !ok {
 			http.NotFound(w, r)
 			return
