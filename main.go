@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,7 +27,7 @@ const storeFile = "urls.json"
 func loadStore() {
 	data, err := os.ReadFile(storeFile)
 	if err != nil {
-		return // file doesn't exist yet, start fresh
+		return
 	}
 	mu.Lock()
 	defer mu.Unlock()
@@ -54,34 +55,6 @@ func generateCode(length int) string {
 	return string(code)
 }
 
-func startsWithHTTP(url string) bool {
-    return len(url) >= 7 && (url[:7] == "http://" || url[:8] == "https://")
-
-}
-
-func getPort() string {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	return port
-}
-
-// keepAlive pings the app's own /ping endpoint every 10 minutes
-// to prevent Render free tier from spinning down the service.
-func keepAlive(baseURL string) {
-	for {
-		time.Sleep(10 * time.Minute)
-		resp, err := http.Get(baseURL + "ping")
-		if err != nil {
-			fmt.Println("Keep-alive ping failed:", err)
-			continue
-		}
-		resp.Body.Close()
-		fmt.Println("Keep-alive ping sent")
-	}
-}
-
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	loadStore()
@@ -90,23 +63,18 @@ func main() {
 
 	router := http.NewServeMux()
 
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:" + getPort() + "/"
-	}
-
-	// Start keep-alive only when deployed (BASE_URL is set)
-	if os.Getenv("BASE_URL") != "" {
-		go keepAlive(baseURL)
-		fmt.Println("Keep-alive started, pinging", baseURL+"ping", "every 10 minutes")
-	}
-
 	// Home page
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("short")
 
 		var data PageData
 		if code != "" {
+			// Construct baseURL from request headers
+			scheme := "https"
+			if strings.Contains(r.Host, "localhost") || strings.Contains(r.Host, "127.0.0.1") {
+				scheme = "http"
+			}
+			baseURL := scheme + "://" + r.Host + "/"
 			data.ShortURL = baseURL + code
 		}
 
@@ -115,29 +83,28 @@ func main() {
 
 	// Shorten URL
 	router.HandleFunc("/shorten", func(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodPost {
-        http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
-        return
-    }
+		if r.Method != http.MethodPost {
+			http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
+			return
+		}
 
-    longURL := r.FormValue("url")
+		longURL := r.FormValue("url")
 
-    if longURL == "" {
-        http.Error(w, "URL cannot be empty", http.StatusBadRequest)
-        return
-    }
+		if longURL == "" {
+			http.Error(w, "URL cannot be empty", http.StatusBadRequest)
+			return
+		}
 
-    if !startsWithHTTP(longURL) {
-        longURL = "https://" + longURL
-    }
-
-    _, err := url.ParseRequestURI(longURL)
-    if err != nil {
-        http.Error(w, "Invalid URL format", http.StatusBadRequest)
-        return
-    }
-
-    
+		// 🔥 Proper URL handling
+		parsed, err := url.Parse(longURL)
+		if err != nil || parsed.Host == "" {
+			longURL = "https://" + longURL
+			parsed, err = url.Parse(longURL)
+			if err != nil || parsed.Host == "" {
+				http.Error(w, "Invalid URL", http.StatusBadRequest)
+				return
+			}
+		}
 
 		var code string
 		mu.Lock()
@@ -153,24 +120,20 @@ func main() {
 
 		http.Redirect(w, r, "/?short="+code, http.StatusSeeOther)
 	})
-
-	// Redirect handler
-	// Health check for keep-alive pinging
-	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("pong"))
-	})
-
 	router.HandleFunc("/{code}", func(w http.ResponseWriter, r *http.Request) {
 		code := r.PathValue("code")
 
 		mu.RLock()
 		longURL, ok := urlStore[code]
 		mu.RUnlock()
+
 		if !ok {
 			http.NotFound(w, r)
 			return
 		}
+
+		// 🔥 DEBUG (important)
+		fmt.Println("Redirecting to:", longURL)
 
 		http.Redirect(w, r, longURL, http.StatusFound)
 	})
@@ -180,10 +143,18 @@ func main() {
 		Handler: router,
 	}
 
-	fmt.Println("Server running on port", getPort())
+	fmt.Println("Running on port", getPort())
 
 	err := srv.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Println("Error:", err)
 	}
+}
+
+func getPort() string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	return port
 }
