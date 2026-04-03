@@ -55,7 +55,8 @@ func generateCode(length int) string {
 }
 
 func startsWithHTTP(url string) bool {
-	return len(url) >= 7 && (url[:7] == "http://" || url[:8] == "https://")
+    return len(url) >= 7 && (url[:7] == "http://" || url[:8] == "https://")
+
 }
 
 func getPort() string {
@@ -114,27 +115,29 @@ func main() {
 
 	// Shorten URL
 	router.HandleFunc("/shorten", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
-			return
-		}
+    if r.Method != http.MethodPost {
+        http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
+        return
+    }
 
-		longURL := r.FormValue("url")
+    longURL := r.FormValue("url")
 
-		if !startsWithHTTP(longURL) {
-		longURL = "https://" + longURL
-		}
+    if longURL == "" {
+        http.Error(w, "URL cannot be empty", http.StatusBadRequest)
+        return
+    }
 
-		if longURL == "" {
-			http.Error(w, "URL cannot be empty", http.StatusBadRequest)
-			return
-		}
+    if !startsWithHTTP(longURL) {
+        longURL = "https://" + longURL
+    }
 
-		_, err := url.ParseRequestURI(longURL)
-		if err != nil {
-			http.Error(w, "Invalid URL format", http.StatusBadRequest)
-			return
-		}
+    _, err := url.ParseRequestURI(longURL)
+    if err != nil {
+        http.Error(w, "Invalid URL format", http.StatusBadRequest)
+        return
+    }
+
+    
 
 		var code string
 		mu.Lock()
