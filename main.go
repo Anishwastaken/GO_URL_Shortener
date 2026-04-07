@@ -95,7 +95,7 @@ func main() {
 			return
 		}
 
-		// 🔥 Proper URL handling
+		//  Proper URL handling
 		parsed, err := url.Parse(longURL)
 		if err != nil || parsed.Host == "" {
 			longURL = "https://" + longURL
@@ -132,7 +132,7 @@ func main() {
 			return
 		}
 
-		// 🔥 DEBUG (important)
+		//  DEBUG (important)
 		fmt.Println("Redirecting to:", longURL)
 
 		http.Redirect(w, r, longURL, http.StatusFound)
